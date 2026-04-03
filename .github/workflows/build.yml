@@ -60,10 +60,9 @@ jobs:
     - name: Convert Sparse to Raw (Fixing Invalid Sparse Format)
       run: |
         cd lpbinary/binary
-        # Hàm tự động kiểm tra và convert nếu là sparse, nếu là raw thì giữ nguyên
         for img in system.img vendor.img product.img system_ext.img; do
           if [ -f "$img" ]; then
-            echo "Processing $img..."
+            echo "Checking and converting $img..."
             simg2img "$img" "${img}.raw" 2>/dev/null || cp "$img" "${img}.raw"
             mv "${img}.raw" "$img"
           fi
@@ -72,14 +71,21 @@ jobs:
     - name: Packing Super Image
       run: |
         cd lpbinary/binary
-        # Tính toán dung lượng sau khi đã unsparse để tránh lỗi metadata
+        # Lấy kích thước chính xác sau khi unsparse
         SYS_SIZE=$(ls -nl system.img | awk '{print $5}')
         VEN_SIZE=$(ls -nl vendor.img | awk '{print $5}')
         PROD_SIZE=$(ls -nl product.img | awk '{print $5}')
         EXT_SIZE=$(ls -nl system_ext.img | awk '{print $5}')
         
+        # Thiết lập thông số mới cho Samsung A03 (64GB)
+        # Nâng giới hạn lên ~8.5GB để tránh lỗi "not enough space"
+        SUPER_DEVICE_SIZE=9126805504
+        SUPER_GROUP_SIZE=9124708352
+        
+        echo "Packing with Device Size: $SUPER_DEVICE_SIZE"
+        
         ./lpmake --metadata-size 65536 --super-name super --metadata-slots 2 \
-          --device super:6763315200 --group main:6761218048 \
+          --device super:$SUPER_DEVICE_SIZE --group main:$SUPER_GROUP_SIZE \
           --partition system:readonly:$SYS_SIZE:main --image system=system.img \
           --partition vendor:readonly:$VEN_SIZE:main --image vendor=vendor.img \
           --partition product:readonly:$PROD_SIZE:main --image product=product.img \
@@ -103,7 +109,7 @@ jobs:
             Device: Samsung Galaxy A03
             Version: ${{ github.event.inputs.VERSION }}
             Rom Name: ${{ github.event.inputs.NAME }}
-            Flash: Extract the 7z file and flash through ODIN in AP Section.
+            Note: Super partition size increased to 8.5GB.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
