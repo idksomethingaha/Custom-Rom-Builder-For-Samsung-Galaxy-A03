@@ -1,0 +1,109 @@
+name: Custom Rom Builder Samsung Galaxy A03
+permissions:
+  contents: write
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+        GSI:
+              description: ' GSI Image Direct Link '
+              required: true
+              default: 'https://github.com/mytja/treble_pixelos/releases/download/20250806/pixelos_arm64_bgN_ext4-16.0-unofficial-20250806.img.xz'        
+        NAME:
+              description: 'Rom Name'
+              required: true
+              default: 'aosp-arm64-ab-gapps-14.0-a03.7z'
+        VERSION:
+              description: 'Baseband Version'
+              required: true
+              default: 'A035FXXS9CYG1'
+        VENDOR:
+              description: 'Enter Direct Link Of Your Version Vendor'
+              required: true
+              default: 'https://store4.gofile.io/download/web/8cd01c65-8a59-4506-ad15-6d53d3779df5/vendor.img'
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Install Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y zip xz-utils unzip p7zip-full wget android-sdk-libsparse-utils
+        
+    - name: Installing Tools
+      run: |
+        git clone https://github.com/Exynos-nigg/lpunpack-lpmake-mirror.git lpbinary
+        cd lpbinary
+        bash install.sh
+
+    - name: Downloading and Extracting GSI
+      run: |
+        cd lpbinary/binary
+        wget -O gsi_image.img.xz "${{ github.event.inputs.GSI }}"
+        unxz gsi_image.img.xz
+        mv gsi_image.img system.img
+
+    - name: Preparing Files (Vendor, Product, Ext)
+      run: |
+        cd lpbinary/binary
+        wget -O vendor.img "${{ github.event.inputs.VENDOR }}"
+        wget -O product.img "https://store-na-phx-4.gofile.io/download/web/2abdabb9-36c3-4a79-acba-ea331aa6f8ab/product.img"
+        wget -O system_ext.img "https://store4.gofile.io/download/web/e52b2145-2d82-472d-9ede-98416a2476f2/system_ext.img"
+
+    - name: Convert Sparse to Raw (Fixing Invalid Sparse Format)
+      run: |
+        cd lpbinary/binary
+        # Hàm tự động kiểm tra và convert nếu là sparse, nếu là raw thì giữ nguyên
+        for img in system.img vendor.img product.img system_ext.img; do
+          if [ -f "$img" ]; then
+            echo "Processing $img..."
+            simg2img "$img" "${img}.raw" 2>/dev/null || cp "$img" "${img}.raw"
+            mv "${img}.raw" "$img"
+          fi
+        done
+
+    - name: Packing Super Image
+      run: |
+        cd lpbinary/binary
+        # Tính toán dung lượng sau khi đã unsparse để tránh lỗi metadata
+        SYS_SIZE=$(ls -nl system.img | awk '{print $5}')
+        VEN_SIZE=$(ls -nl vendor.img | awk '{print $5}')
+        PROD_SIZE=$(ls -nl product.img | awk '{print $5}')
+        EXT_SIZE=$(ls -nl system_ext.img | awk '{print $5}')
+        
+        ./lpmake --metadata-size 65536 --super-name super --metadata-slots 2 \
+          --device super:6763315200 --group main:6761218048 \
+          --partition system:readonly:$SYS_SIZE:main --image system=system.img \
+          --partition vendor:readonly:$VEN_SIZE:main --image vendor=vendor.img \
+          --partition product:readonly:$PROD_SIZE:main --image product=product.img \
+          --partition system_ext:readonly:$EXT_SIZE:main --image system_ext=system_ext.img \
+          --sparse --output super.img
+
+    - name: Creating tar and compressing
+      run: |
+        cd lpbinary/binary
+        tar -cvf super.tar super.img
+        7z a "${{ github.event.inputs.NAME }}" super.tar
+        rm -rf super.tar super.img
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: lpbinary/binary/${{ github.event.inputs.NAME }}
+        name: ${{ github.event.inputs.NAME }}-${{ github.run_id }}
+        tag_name: ${{ github.run_id }}
+        body: |
+            Device: Samsung Galaxy A03
+            Version: ${{ github.event.inputs.VERSION }}
+            Rom Name: ${{ github.event.inputs.NAME }}
+            Flash: Extract the 7z file and flash through ODIN in AP Section.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
