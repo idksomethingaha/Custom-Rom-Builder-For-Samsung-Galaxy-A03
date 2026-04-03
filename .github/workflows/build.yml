@@ -14,7 +14,7 @@ on:
         NAME:
               description: 'Rom Name'
               required: true
-              default: 'aosp-arm64-ab-gapps-14.0-a03.7z'
+              default: 'aosp-arm64-ab-gapps-14.0-a03'
         VERSION:
               description: 'Baseband Version'
               required: true
@@ -35,7 +35,7 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt update
-        sudo apt install -y zip xz-utils unzip p7zip-full wget android-sdk-libsparse-utils
+        sudo apt install -y zip xz-utils unzip p7zip-full wget android-sdk-libsparse-utils curl
         
     - name: Installing Tools
       run: |
@@ -57,12 +57,12 @@ jobs:
         wget -O product.img "https://github.com/idksomethingaha/aod/releases/download/n/product.img"
         wget -O system_ext.img "https://github.com/idksomethingaha/aod/releases/download/n/system_ext.img"
 
-    - name: Convert Sparse to Raw (Fixing Invalid Sparse Format)
+    - name: Convert Sparse to Raw
       run: |
         cd lpbinary/binary
         for img in system.img vendor.img product.img system_ext.img; do
           if [ -f "$img" ]; then
-            echo "Checking and converting $img..."
+            echo "Processing $img..."
             simg2img "$img" "${img}.raw" 2>/dev/null || cp "$img" "${img}.raw"
             mv "${img}.raw" "$img"
           fi
@@ -71,18 +71,14 @@ jobs:
     - name: Packing Super Image
       run: |
         cd lpbinary/binary
-        # Lấy kích thước chính xác sau khi unsparse
         SYS_SIZE=$(ls -nl system.img | awk '{print $5}')
         VEN_SIZE=$(ls -nl vendor.img | awk '{print $5}')
         PROD_SIZE=$(ls -nl product.img | awk '{print $5}')
         EXT_SIZE=$(ls -nl system_ext.img | awk '{print $5}')
         
-        # Thiết lập thông số mới cho Samsung A03 (64GB)
-        # Nâng giới hạn lên ~8.5GB để tránh lỗi "not enough space"
+        # Thiết lập thông số nới rộng cho Samsung A03 (64GB)
         SUPER_DEVICE_SIZE=9126805504
         SUPER_GROUP_SIZE=9124708352
-        
-        echo "Packing with Device Size: $SUPER_DEVICE_SIZE"
         
         ./lpmake --metadata-size 65536 --super-name super --metadata-slots 2 \
           --device super:$SUPER_DEVICE_SIZE --group main:$SUPER_GROUP_SIZE \
@@ -96,20 +92,20 @@ jobs:
       run: |
         cd lpbinary/binary
         tar -cvf super.tar super.img
-        7z a "${{ github.event.inputs.NAME }}" super.tar
+        7z a "${{ github.event.inputs.NAME }}.7z" super.tar
         rm -rf super.tar super.img
 
-    - name: Upload to Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: lpbinary/binary/${{ github.event.inputs.NAME }}
-        name: ${{ github.event.inputs.NAME }}-${{ github.run_id }}
-        tag_name: ${{ github.run_id }}
-        body: |
-            Device: Samsung Galaxy A03
-            Version: ${{ github.event.inputs.VERSION }}
-            Rom Name: ${{ github.event.inputs.NAME }}
-            Note: Super partition size increased to 8.5GB.
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload to BashUpload (No 2GB Limit)
+      run: |
+        cd lpbinary/binary
+        FILE_NAME="${{ github.event.inputs.NAME }}.7z"
+        echo "--------------------------------------------------"
+        echo "ĐANG UPLOAD ROM LÊN BASHUPLOAD..."
+        echo "--------------------------------------------------"
+        # Upload và in link tải ra màn hình log
+        curl https://bashupload.com/$FILE_NAME --data-binary @$FILE_NAME
+        echo ""
+        echo "--------------------------------------------------"
+        echo "BUILD HOÀN TẤT! COPY LINK TRÊN ĐỂ TẢI ROM."
+        echo "--------------------------------------------------"
         
