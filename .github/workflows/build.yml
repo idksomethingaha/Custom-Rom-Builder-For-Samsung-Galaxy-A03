@@ -22,7 +22,7 @@ on:
         VENDOR:
               description: 'Enter Direct Link Of Your Version Vendor'
               required: true
-              default: 'https://store4.gofile.io/download/web/8cd01c65-8a59-4506-ad15-6d53d3779df5/vendor.img'
+              default: 'https://github.com/idksomethingaha/aod/releases/download/n/vendor.img'
 
 jobs:
   Build:
@@ -54,8 +54,8 @@ jobs:
       run: |
         cd lpbinary/binary
         wget -O vendor.img "${{ github.event.inputs.VENDOR }}"
-        wget -O product.img "https://store-na-phx-4.gofile.io/download/web/2abdabb9-36c3-4a79-acba-ea331aa6f8ab/product.img"
-        wget -O system_ext.img "https://store4.gofile.io/download/web/e52b2145-2d82-472d-9ede-98416a2476f2/system_ext.img"
+        wget -O product.img "https://github.com/idksomethingaha/aod/releases/download/n/product.img"
+        wget -O system_ext.img "https://github.com/idksomethingaha/aod/releases/download/n/system_ext.img"
 
     - name: Convert Sparse to Raw (Fixing Invalid Sparse Format)
       run: |
