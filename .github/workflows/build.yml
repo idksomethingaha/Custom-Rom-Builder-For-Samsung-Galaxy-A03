@@ -35,7 +35,7 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt update
-        sudo apt install -y zip xz-utils unzip p7zip-full wget android-sdk-libsparse-utils curl
+        sudo apt install -y zip xz-utils unzip p7zip-full wget android-sdk-libsparse-utils curl jq
         
     - name: Installing Tools
       run: |
@@ -76,7 +76,7 @@ jobs:
         PROD_SIZE=$(ls -nl product.img | awk '{print $5}')
         EXT_SIZE=$(ls -nl system_ext.img | awk '{print $5}')
         
-        # Thiết lập thông số nới rộng cho Samsung A03 (64GB)
+        # Thông số nới rộng cho Samsung A03 (64GB)
         SUPER_DEVICE_SIZE=9126805504
         SUPER_GROUP_SIZE=9124708352
         
@@ -95,17 +95,20 @@ jobs:
         7z a "${{ github.event.inputs.NAME }}.7z" super.tar
         rm -rf super.tar super.img
 
-    - name: Upload to BashUpload (No 2GB Limit)
+    - name: Upload to Gofile.io
       run: |
         cd lpbinary/binary
-        FILE_NAME="${{ github.event.inputs.NAME }}.7z"
+        FILE_PATH="${{ github.event.inputs.NAME }}.7z"
+        
+        echo "Đang lấy server Gofile..."
+        SERVER=$(curl -s https://api.gofile.io/getServer | jq -r '.data.server')
+        
+        echo "Đang upload lên server: $SERVER..."
+        RESPONSE=$(curl -F "file=@$FILE_PATH" "https://${SERVER}.gofile.io/uploadFile")
+        
         echo "--------------------------------------------------"
-        echo "ĐANG UPLOAD ROM LÊN BASHUPLOAD..."
-        echo "--------------------------------------------------"
-        # Upload và in link tải ra màn hình log
-        curl https://bashupload.com/$FILE_NAME --data-binary @$FILE_NAME
-        echo ""
-        echo "--------------------------------------------------"
-        echo "BUILD HOÀN TẤT! COPY LINK TRÊN ĐỂ TẢI ROM."
+        echo "BUILD HOÀN TẤT!"
+        echo "LINK TẢI ROM (GOFILE):"
+        echo $RESPONSE | jq -r '.data.downloadPage'
         echo "--------------------------------------------------"
         
