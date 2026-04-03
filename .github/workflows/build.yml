@@ -76,7 +76,7 @@ jobs:
         PROD_SIZE=$(ls -nl product.img | awk '{print $5}')
         EXT_SIZE=$(ls -nl system_ext.img | awk '{print $5}')
         
-        # Thông số nới rộng cho Samsung A03 (64GB)
+        # Thiết lập thông số Super cho Samsung A03 (64GB) - Android 13+
         SUPER_DEVICE_SIZE=9126805504
         SUPER_GROUP_SIZE=9124708352
         
@@ -88,27 +88,38 @@ jobs:
           --partition system_ext:readonly:$EXT_SIZE:main --image system_ext=system_ext.img \
           --sparse --output super.img
 
-    - name: Creating tar and compressing
+    - name: Creating tar and compressing (Fast Mode)
       run: |
         cd lpbinary/binary
         tar -cvf super.tar super.img
-        7z a "${{ github.event.inputs.NAME }}.7z" super.tar
+        # Sử dụng mức nén thấp nhất để tiết kiệm thời gian trên VM
+        7z a -mx1 "${{ github.event.inputs.NAME }}.7z" super.tar
         rm -rf super.tar super.img
 
-    - name: Upload to Gofile.io
+    - name: Upload to Gofile.io (New API 2026)
       run: |
         cd lpbinary/binary
         FILE_PATH="${{ github.event.inputs.NAME }}.7z"
         
-        echo "Đang lấy server Gofile..."
-        SERVER=$(curl -s https://api.gofile.io/getServer | jq -r '.data.server')
+        echo "Kết nối Gofile..."
+        # Lấy server bằng sed để tránh lỗi parse JSON nếu API trả về lỗi
+        SERVER_DATA=$(curl -s https://api.gofile.io/getServer)
+        SERVER=$(echo $SERVER_DATA | sed 's/.*"server":"\([^"]*\)".*/\1/')
+        
+        # Dự phòng nếu lấy server tự động thất bại
+        if [[ ! $SERVER =~ ^store[0-9]+$ ]]; then
+          SERVER="store1"
+        fi
         
         echo "Đang upload lên server: $SERVER..."
         RESPONSE=$(curl -F "file=@$FILE_PATH" "https://${SERVER}.gofile.io/uploadFile")
         
+        # Trích xuất link download page
+        DOWNLOAD_LINK=$(echo $RESPONSE | sed 's/.*"downloadPage":"\([^"]*\)".*/\1/')
+        
         echo "--------------------------------------------------"
         echo "BUILD HOÀN TẤT!"
         echo "LINK TẢI ROM (GOFILE):"
-        echo $RESPONSE | jq -r '.data.downloadPage'
+        echo "$DOWNLOAD_LINK"
         echo "--------------------------------------------------"
         
